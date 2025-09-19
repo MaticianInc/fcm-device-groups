@@ -5,6 +5,7 @@ edition = "2024"
 license = "MIT"
 description = "Rust crate for managing Firebase Cloud Messaging device groups"
 keywords = ["fcm"]
+repository = "https://github.com/MaticianInc/fcm-device-groups"
 
 [dependencies]
 reqwest = { version = "0.12", features = ["json"] }
