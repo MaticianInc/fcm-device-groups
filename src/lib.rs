@@ -1,6 +1,8 @@
 #![warn(missing_docs)]
 //! A crate for using Firebase Cloud Messaging device groups.
 //! See <https://firebase.google.com/docs/cloud-messaging/android/topic-messaging>
+//!
+//! Note that you will have to manually depend on a `reqwest` TLS feature if the default-tls feature is disabled.
 use reqwest::{
     Client as HttpClient, IntoUrl, Response, Url,
     header::{self, HeaderMap, HeaderValue},
