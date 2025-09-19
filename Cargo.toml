@@ -1,0 +1,20 @@
+[package]
+name = "fcm-device-group"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Rust crate for managing Firebase Cloud Messaging device groups"
+keywords = ["fcm"]
+
+[dependencies]
+reqwest = { version = "0.12", features = ["json"] }
+serde = "1.0.215"
+thiserror = "2.0.10"
+log = "0.4.28"
+
+
+[dev-dependencies]
+clap = {version = "4.5.47", features = ["derive", "env"] }
+env_logger = "0.11.8"
+tokio = {version = "1.47.1", features = ["rt"]}
+yup-oauth2 = "11.0.0"
