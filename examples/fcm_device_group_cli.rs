@@ -1,7 +1,9 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use fcm_device_group::{FCMDeviceGroupClient, FIREBASE_NOTIFICATION_URL, Operation};
+use fcm_device_group::{
+    FCMDeviceGroup, FCMDeviceGroupClient, FIREBASE_NOTIFICATION_URL, Operation,
+};
 use reqwest::Url;
 use yup_oauth2::ServiceAccountAuthenticator;
 
@@ -58,8 +60,6 @@ pub enum DeviceGroupOperation {
     },
 }
 
-const FCM_SCOPES: &[&str] = &["https://www.googleapis.com/auth/firebase.messaging"];
-
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     env_logger::init();
@@ -73,52 +73,84 @@ async fn main() {
         .build()
         .await
         .unwrap();
-    let token = auth.token(FCM_SCOPES).await.unwrap();
-    let fcm_client =
-        FCMDeviceGroupClient::with_url(args.url, &args.sender_id, token.token().unwrap()).unwrap();
+
+    let fcm_client = FCMDeviceGroupClient::with_url(args.url, &args.sender_id, auth).unwrap();
 
     log::info!("Running Request");
-    let notification_key = match args.operation {
+    match args.operation {
         DeviceGroupOperation::Create {
             notification_key_name,
             registration_ids,
-        } => fcm_client
-            .apply(Operation::Create {
-                notification_key_name,
-                registration_ids,
-            })
-            .await
-            .unwrap(),
+        } => {
+            fcm_client
+                .create_group(notification_key_name, registration_ids)
+                .await
+                .unwrap();
+        }
         DeviceGroupOperation::Add {
-            notification_key_name,
+            notification_key_name: None,
             notification_key,
             registration_ids,
-        } => fcm_client
-            .apply(Operation::Add {
-                notification_key_name,
-                notification_key,
-                registration_ids,
-            })
-            .await
-            .unwrap(),
+        } => {
+            fcm_client
+                .apply(Operation::Remove {
+                    notification_key_name: None,
+                    notification_key,
+                    registration_ids,
+                })
+                .await
+                .unwrap();
+        }
+        DeviceGroupOperation::Add {
+            notification_key_name: Some(notification_key_name),
+            notification_key,
+            registration_ids,
+        } => {
+            fcm_client
+                .add_to_group(
+                    FCMDeviceGroup {
+                        notification_key_name,
+                        notification_key,
+                    },
+                    registration_ids,
+                )
+                .await
+                .unwrap();
+        }
         DeviceGroupOperation::Remove {
-            notification_key_name,
+            notification_key_name: None,
             notification_key,
             registration_ids,
-        } => fcm_client
-            .apply(Operation::Remove {
-                notification_key_name,
-                notification_key,
-                registration_ids,
-            })
-            .await
-            .unwrap(),
+        } => {
+            fcm_client
+                .apply(Operation::Remove {
+                    notification_key_name: None,
+                    notification_key,
+                    registration_ids,
+                })
+                .await
+                .unwrap();
+        }
+        DeviceGroupOperation::Remove {
+            notification_key_name: Some(notification_key_name),
+            notification_key,
+            registration_ids,
+        } => {
+            fcm_client
+                .remove_from_group(
+                    FCMDeviceGroup {
+                        notification_key_name,
+                        notification_key,
+                    },
+                    registration_ids,
+                )
+                .await
+                .unwrap();
+        }
         DeviceGroupOperation::GetKey { name } => {
             let device_group = fcm_client.get_key(name).await.unwrap();
             println!("Device group {:?}", device_group);
             return;
         }
     };
-
-    println!("Notification Key is {:?}", notification_key);
 }

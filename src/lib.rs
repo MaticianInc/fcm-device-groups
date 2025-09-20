@@ -3,25 +3,30 @@
 //! See <https://firebase.google.com/docs/cloud-messaging/android/topic-messaging>
 //!
 //! Note that you will have to manually depend on a `reqwest` TLS feature if the default-tls feature is disabled.
+use google_apis_common::GetToken;
 use reqwest::{
-    Client as HttpClient, IntoUrl, Response, Url,
+    Client as HttpClient, IntoUrl, RequestBuilder, Response, Url,
     header::{self, HeaderMap, HeaderValue},
 };
 
 pub use raw::{Operation, OperationResponse};
 
 use error::operation_errors::OperationResult;
+
 pub mod error;
 mod raw;
 
 /// Default URL used for FCM device groups
 pub const FIREBASE_NOTIFICATION_URL: &str = "https://fcm.googleapis.com/fcm/notification";
 
+const FCM_DEVICE_GROUP_SCOPES: &[&str] = &["https://www.googleapis.com/auth/firebase.messaging"];
+
 /// Client to use fcm device groups
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FCMDeviceGroupClient {
     url: Url,
     client: HttpClient,
+    auth: Box<dyn GetToken + 'static>,
 }
 
 /// A Representation of an FCM Device group
@@ -39,22 +44,18 @@ impl FCMDeviceGroupClient {
     /// Creates a new `FCMDeviceGroupClient` with the default url and the provided bearer auth string
     pub fn new(
         sender_id: &str,
-        bearer_auth: &str,
+        auth: impl GetToken + 'static,
     ) -> Result<Self, error::FCMDeviceGroupClientCreationError> {
-        Self::with_url(FIREBASE_NOTIFICATION_URL, sender_id, bearer_auth)
+        Self::with_url(FIREBASE_NOTIFICATION_URL, sender_id, auth)
     }
 
     /// Creates a new `FCMDeviceGroupClient` with the given url and the provided bearer auth string
     pub fn with_url(
         url: impl IntoUrl,
         sender_id: &str,
-        bearer_auth: &str,
+        auth: impl GetToken + 'static,
     ) -> Result<Self, error::FCMDeviceGroupClientCreationError> {
-        let mut auth_header = header::HeaderValue::try_from(format!("Bearer {}", bearer_auth))?;
-        auth_header.set_sensitive(true);
-
         let mut headers = HeaderMap::new();
-        headers.insert(header::AUTHORIZATION, auth_header);
         headers.insert("project_id", header::HeaderValue::try_from(sender_id)?);
         headers.insert(
             "access_token_auth",
@@ -67,15 +68,21 @@ impl FCMDeviceGroupClient {
                 .default_headers(headers)
                 .connection_verbose(true)
                 .build()?,
+            auth: Box::new(auth),
         })
     }
 
     /// Creates a new `FCMDeviceGroupClient` with the given url and client. Note that the creator of the client
     /// is responsible for adding authorization headers
-    pub fn with_client(client: HttpClient, url: impl IntoUrl) -> Self {
+    pub fn with_client(
+        client: HttpClient,
+        url: impl IntoUrl,
+        auth: impl GetToken + 'static,
+    ) -> Self {
         Self {
             url: url.into_url().unwrap(),
             client,
+            auth: Box::new(auth),
         }
     }
 
@@ -137,14 +144,18 @@ impl FCMDeviceGroupClient {
         &self,
         notification_key_name: String,
     ) -> OperationResult<FCMDeviceGroup, error::operation_errors::GetKeyError> {
-        let response = self
+        let request = self
             .client
             .get(self.url.clone())
             .query(&[("notification_key_name", notification_key_name.as_str())])
             .header(
                 header::CONTENT_TYPE,
                 HeaderValue::from_static("application/json"),
-            )
+            );
+        let response = self
+            .add_token(request)
+            .await
+            .map_err(error::RawError::GetTokenError)?
             .send()
             .await?;
         let response =
@@ -156,12 +167,25 @@ impl FCMDeviceGroupClient {
         })
     }
 
-    async fn apply_raw(&self, operation: Operation) -> Result<Response, reqwest::Error> {
-        self.client
-            .post(self.url.clone())
-            .json(&operation)
-            .send()
+    async fn apply_raw(&self, operation: Operation) -> Result<Response, error::RawError> {
+        let request = self.client.post(self.url.clone()).json(&operation);
+
+        let request = self
+            .add_token(request)
             .await
+            .map_err(error::RawError::GetTokenError)?;
+
+        Ok(request.send().await?)
+    }
+
+    async fn add_token(
+        &self,
+        request: RequestBuilder,
+    ) -> Result<RequestBuilder, Box<dyn std::error::Error + Send + Sync>> {
+        match self.auth.get_token(FCM_DEVICE_GROUP_SCOPES).await? {
+            Some(token) => Ok(request.bearer_auth(token)),
+            None => Ok(request),
+        }
     }
 
     async fn apply_operation<E: error::FCMDeviceGroupError>(

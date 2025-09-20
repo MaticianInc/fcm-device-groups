@@ -1,6 +1,6 @@
 [package]
 name = "fcm-device-group"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "Rust crate for managing Firebase Cloud Messaging device groups"
@@ -13,6 +13,7 @@ default = ["default-tls"]
 default-tls = ["reqwest/default-tls"]
 
 [dependencies]
+google-apis-common = "7.0"
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 serde = "1.0.215"
 thiserror = "2.0.10"
@@ -24,4 +25,5 @@ clap = {version = "4.5.47", features = ["derive", "env"] }
 env_logger = "0.11.8"
 reqwest = { version = "0.12", default-features = true }
 tokio = {version = "1.47.1", features = ["rt"]}
+google-apis-common = { version = "7.0", features = ["yup-oauth2"]}
 yup-oauth2 = "11.0.0"

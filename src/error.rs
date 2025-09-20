@@ -30,6 +30,9 @@ pub enum FCMDeviceGroupsRequestError<E: FCMDeviceGroupError> {
     /// Error http error
     #[error("Error Making HTTP Request with FCM")]
     HttpError(#[from] reqwest::Error),
+    /// Get Token Error
+    #[error("Error Getting Auth Token")]
+    GetTokenError(Box<dyn std::error::Error + Send + Sync>),
     /// Parsed Bad Request Error
     #[error("Bad Request")]
     BadRequestError(#[from] E),
@@ -140,6 +143,24 @@ pub mod operation_errors {
                 KEY_NOT_FOUND => Some(Self::KeyNotFound),
                 _ => None,
             }
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum RawError {
+    #[error("Error Making HTTP Request with FCM")]
+    HttpError(#[from] reqwest::Error),
+    /// Get Token Error
+    #[error("Error Getting Auth Token")]
+    GetTokenError(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl<E: FCMDeviceGroupError> From<RawError> for FCMDeviceGroupsRequestError<E> {
+    fn from(raw: RawError) -> Self {
+        match raw {
+            RawError::HttpError(error) => Self::HttpError(error),
+            RawError::GetTokenError(error) => Self::GetTokenError(error),
         }
     }
 }
