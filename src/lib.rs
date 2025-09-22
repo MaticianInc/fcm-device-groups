@@ -3,7 +3,10 @@
 //! See <https://firebase.google.com/docs/cloud-messaging/android/topic-messaging>
 //!
 //! Note that you will have to manually depend on a `reqwest` TLS feature if the default-tls feature is disabled.
-pub use google_apis_common::GetToken;
+pub use google_apis_common::{
+    GetToken,
+    auth::{GetTokenClone, NoToken},
+};
 use reqwest::{
     Client as HttpClient, IntoUrl, RequestBuilder, Response, Url,
     header::{self, HeaderMap, HeaderValue},
