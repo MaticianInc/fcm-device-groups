@@ -1,3 +1,5 @@
+//! Raw data types used in FCM Device Group Operations
+
 use serde::{Deserialize, Serialize};
 
 /// Represents a POST operation to fcm. See <https://firebase.google.com/docs/cloud-messaging/android/device-group>
@@ -38,6 +40,14 @@ pub enum Operation {
         /// Registration IDS to add
         registration_ids: Vec<String>,
     },
+}
+
+impl super::Operation for Operation {
+    const DEFAULT_URL: &str = "https://fcm.googleapis.com/fcm/notification";
+
+    fn get_url<T: reqwest::IntoUrl + Clone>(urls: &crate::APIURLs<T>) -> T {
+        urls.device_groups.clone()
+    }
 }
 
 /// Response from a POST Operation

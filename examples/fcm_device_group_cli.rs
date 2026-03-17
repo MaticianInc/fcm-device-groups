@@ -2,9 +2,9 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use fcm_device_group::{
-    FCMDeviceGroup, FCMDeviceGroupClient, FIREBASE_NOTIFICATION_URL, Operation,
+    APIURLs, FCMDeviceGroup, FCMDeviceGroupClient,
+    raw::{device_groups::Operation as DeviceGroupsOperation, topics::TopicError},
 };
-use reqwest::Url;
 use yup_oauth2::ServiceAccountAuthenticator;
 
 #[derive(Debug, Parser)]
@@ -13,8 +13,12 @@ struct Args {
     auth_file: PathBuf,
     #[arg(long)]
     sender_id: String,
-    #[arg(long, default_value =FIREBASE_NOTIFICATION_URL)]
-    url: Url,
+    #[arg(long, default_value = fcm_device_group::DEFAULT_URLS.device_groups)]
+    device_groups_url: String,
+    #[arg(long, default_value = fcm_device_group::DEFAULT_URLS.add_to_topic)]
+    add_to_topic_url: String,
+    #[arg(long, default_value = fcm_device_group::DEFAULT_URLS.remove_from_topic)]
+    remove_from_topic_url: String,
     #[command(subcommand)]
     operation: DeviceGroupOperation,
 }
@@ -58,6 +62,22 @@ pub enum DeviceGroupOperation {
     GetKey {
         name: String,
     },
+    AddDeviceToTopic {
+        /// Topic to Add Devices to.
+        ///
+        /// This program adds the required `/topics/` prefix.
+        topic_name: String,
+        /// Ids to add to the topic
+        registration_ids: Vec<String>,
+    },
+    RemoveDeviceFromTopic {
+        /// Topic to remove devices from.
+        ///
+        /// This program adds the required `/topics/` prefix.
+        topic_name: String,
+        /// Ids to remove from the topic
+        registration_ids: Vec<String>,
+    },
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -74,7 +94,16 @@ async fn main() {
         .await
         .unwrap();
 
-    let fcm_client = FCMDeviceGroupClient::with_url(args.url, &args.sender_id, auth).unwrap();
+    let fcm_client = FCMDeviceGroupClient::with_url(
+        APIURLs {
+            device_groups: &args.device_groups_url,
+            add_to_topic: &args.add_to_topic_url,
+            remove_from_topic: &args.remove_from_topic_url,
+        },
+        &args.sender_id,
+        auth,
+    )
+    .unwrap();
 
     log::info!("Running Request");
     match args.operation {
@@ -93,7 +122,7 @@ async fn main() {
             registration_ids,
         } => {
             fcm_client
-                .apply(Operation::Remove {
+                .apply(DeviceGroupsOperation::Add {
                     notification_key_name: None,
                     notification_key,
                     registration_ids,
@@ -123,7 +152,7 @@ async fn main() {
             registration_ids,
         } => {
             fcm_client
-                .apply(Operation::Remove {
+                .apply(DeviceGroupsOperation::Remove {
                     notification_key_name: None,
                     notification_key,
                     registration_ids,
@@ -151,6 +180,28 @@ async fn main() {
             let device_group = fcm_client.get_key(name).await.unwrap();
             println!("Device group {:?}", device_group);
             return;
+        }
+        DeviceGroupOperation::AddDeviceToTopic {
+            registration_ids,
+            topic_name,
+        } => {
+            let results = fcm_client
+                .add_devices_to_topic(format!("/topics/{}", topic_name), registration_ids)
+                .await
+                .unwrap();
+            let results = results.into_iter().collect::<Result<Vec<()>, TopicError>>().unwrap();
+            println!("Added {} devices to {}", results.len(), topic_name);
+        }
+        DeviceGroupOperation::RemoveDeviceFromTopic {
+            registration_ids,
+            topic_name,
+        } => {
+            let results = fcm_client
+                .remove_devices_from_topic(format!("/topics/{}", topic_name), registration_ids)
+                .await
+                .unwrap();
+            let results = results.into_iter().collect::<Result<Vec<()>, TopicError>>().unwrap();
+            println!("Removed {} devices from {}", results.len(), topic_name);
         }
     };
 }

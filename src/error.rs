@@ -90,6 +90,7 @@ pub mod operation_errors {
     const KEY_NAME_AND_KEY_DONT_MATCH: &str =
         "notification_key_name doesn't match the group name of the notification_key";
     const KEY_NOT_FOUND: &str = "notification_key not found";
+    const TOPIC_NAME_FORMAT_INVALID: &str = "Topic name format is invalid";
 
     pub type OperationResult<T, E> = Result<T, super::FCMDeviceGroupsRequestError<E>>;
 
@@ -145,10 +146,27 @@ pub mod operation_errors {
             }
         }
     }
+
+    #[derive(Debug, Error)]
+    pub enum TopicsError {
+        #[error("{TOPIC_NAME_FORMAT_INVALID}")]
+        TopicNameFormatInvalid,
+    }
+
+    impl FCMDeviceGroupError for TopicsError {
+        fn from_error_str(error: super::FCMDeviceGroupsBadRequest) -> Option<Self> {
+            match error.error.as_str() {
+                TOPIC_NAME_FORMAT_INVALID => Some(Self::TopicNameFormatInvalid),
+                _ => None,
+            }
+        }
+    }
 }
 
+/// Generic Error for all operaturns returned from this library
 #[derive(Debug, Error)]
-pub(crate) enum RawError {
+pub enum RawError {
+    /// HTTP error response from request
     #[error("Error Making HTTP Request with FCM")]
     HttpError(#[from] reqwest::Error),
     /// Get Token Error
