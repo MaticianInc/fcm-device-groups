@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use fcm_device_group::{
-    APIURLs, FCMDeviceGroup, FCMDeviceGroupClient,
+    APIURLs, FCMDeviceGroup, FCMDevicesClient,
     raw::{device_groups::Operation as DeviceGroupsOperation, topics::TopicError},
 };
 use yup_oauth2::ServiceAccountAuthenticator;
@@ -94,7 +94,7 @@ async fn main() {
         .await
         .unwrap();
 
-    let fcm_client = FCMDeviceGroupClient::with_url(
+    let fcm_client = FCMDevicesClient::with_url(
         APIURLs {
             device_groups: &args.device_groups_url,
             add_to_topic: &args.add_to_topic_url,

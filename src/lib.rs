@@ -1,8 +1,11 @@
 #![warn(missing_docs)]
-//! A crate for using Firebase Cloud Messaging device groups.
-//! See <https://firebase.google.com/docs/cloud-messaging/android/topic-messaging>.
+//! A crate for using Firebase Cloud Messaging Devices.
 //!
-//! Note that you will have to manually depend on a `reqwest` TLS feature if the default-tls feature is disabled.
+//! This crate supports adding and removing devices from both
+//! [device groups](https://firebase.google.com/docs/cloud-messaging/device-group)
+//! and [topics](https://firebase.google.com/docs/cloud-messaging/android/topic-messaging).
+//!
+//! Note that you will have to manually depend on a `reqwest` TLS feature if the `default-tls` feature is disabled.
 
 pub use google_apis_common::{
     GetToken,
@@ -28,6 +31,7 @@ mod api_urls;
 pub mod error;
 pub mod raw;
 
+// Topics dont seem to require their own scope for some reason
 const FCM_DEVICE_GROUP_SCOPES: &[&str] = &["https://www.googleapis.com/auth/firebase.messaging"];
 
 /// Set of default URLs to use with firebase
@@ -39,7 +43,7 @@ pub const DEFAULT_URLS: APIURLs<&str> = APIURLs {
 
 /// Client to use fcm device groups
 #[derive(Clone)]
-pub struct FCMDeviceGroupClient {
+pub struct FCMDevicesClient {
     urls: APIURLs<Url>,
     client: HttpClient,
     auth: Box<dyn GetToken + 'static>,
@@ -56,21 +60,21 @@ pub struct FCMDeviceGroup {
     pub notification_key: String,
 }
 
-impl FCMDeviceGroupClient {
-    /// Creates a new `FCMDeviceGroupClient` with the default url and the provided bearer auth string
+impl FCMDevicesClient {
+    /// Creates a new `FCMDevicesClient` with the default url and the provided bearer auth string
     pub fn new(
         sender_id: &str,
         auth: impl GetToken + 'static,
-    ) -> Result<Self, error::FCMDeviceGroupClientCreationError> {
+    ) -> Result<Self, error::FCMDevicesClientCreationError> {
         Self::with_url(DEFAULT_URLS, sender_id, auth)
     }
 
-    /// Creates a new `FCMDeviceGroupClient` with the given url and the provided bearer auth string
+    /// Creates a new `FCMDevicesClient` with the given url and the provided bearer auth string
     pub fn with_url(
         urls: APIURLs<impl IntoUrl + Clone>,
         sender_id: &str,
         auth: impl GetToken + 'static,
-    ) -> Result<Self, error::FCMDeviceGroupClientCreationError> {
+    ) -> Result<Self, error::FCMDevicesClientCreationError> {
         let mut headers = HeaderMap::new();
         headers.insert("project_id", header::HeaderValue::try_from(sender_id)?);
         headers.insert(
@@ -88,13 +92,13 @@ impl FCMDeviceGroupClient {
         )
     }
 
-    /// Creates a new `FCMDeviceGroupClient` with the given url and client. Note that the creator of the client
+    /// Creates a new `FCMDevicesClient` with the given url and client. Note that the creator of the client
     /// is responsible for adding authorization headers
     pub fn with_client(
         client: HttpClient,
         urls: APIURLs<impl IntoUrl + Clone>,
         auth: impl GetToken + 'static,
-    ) -> Result<Self, error::FCMDeviceGroupClientCreationError> {
+    ) -> Result<Self, error::FCMDevicesClientCreationError> {
         Ok(Self {
             urls: urls.into_cannonical()?,
             client,
@@ -108,10 +112,10 @@ impl FCMDeviceGroupClient {
         operation: impl Operation,
     ) -> Result<
         OperationResponse,
-        error::FCMDeviceGroupsRequestError<error::FCMDeviceGroupsBadRequest>,
+        error::FCMDevicesRequestError<error::FCMDevicesBadRequest>,
     > {
         let response = self.apply_raw(operation).await?;
-        error::FCMDeviceGroupsRequestError::json_response(response).await
+        error::FCMDevicesRequestError::json_response(response).await
     }
 
     /// Create a new group with the provided name and ID
@@ -175,7 +179,7 @@ impl FCMDeviceGroupClient {
             .send()
             .await?;
         let response =
-            error::FCMDeviceGroupsRequestError::<error::operation_errors::GetKeyError>::json_response::<OperationResponse>(response)
+            error::FCMDevicesRequestError::<error::operation_errors::GetKeyError>::json_response::<OperationResponse>(response)
                 .await?;
         Ok(FCMDeviceGroup {
             notification_key_name,
@@ -228,7 +232,7 @@ impl FCMDeviceGroupClient {
         }
     }
 
-    async fn apply_device_groups_operation<E: error::FCMDeviceGroupError>(
+    async fn apply_device_groups_operation<E: error::FCMDevicesError>(
         &self,
         operation: DeviceGroupsOperation,
     ) -> OperationResult<FCMDeviceGroup, E> {
@@ -254,7 +258,7 @@ impl FCMDeviceGroupClient {
         };
         let response = self.apply_raw(operation).await?;
         let response =
-            error::FCMDeviceGroupsRequestError::<E>::json_response::<OperationResponse>(response)
+            error::FCMDevicesRequestError::<E>::json_response::<OperationResponse>(response)
                 .await?;
         Ok(FCMDeviceGroup {
             notification_key_name: key_name,
@@ -265,7 +269,7 @@ impl FCMDeviceGroupClient {
     async fn apply_topics_operation(&self, op: impl Operation) -> OperationResult<Vec<Result<(), TopicError>>, error::operation_errors::TopicsError> {
         let response = self.apply_raw(op).await?;
 
-        let topic_results = error::FCMDeviceGroupsRequestError::<error::operation_errors::TopicsError>::json_response::<TopicResults>(response)
+        let topic_results = error::FCMDevicesRequestError::<error::operation_errors::TopicsError>::json_response::<TopicResults>(response)
                 .await?;
         Ok(topic_results.results)
     }
